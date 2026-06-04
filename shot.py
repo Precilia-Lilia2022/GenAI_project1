@@ -1,6 +1,6 @@
 
 import json
-import pandas as pd
+import pandas as pd # type: ignore
 
 class FewShotPosts:
     def __init__(self, file_path="data/processed_posts.json"):
