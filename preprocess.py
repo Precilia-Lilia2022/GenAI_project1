@@ -20,17 +20,49 @@ def process_posts(raw_file_path, processed_file_path="data/processed_posts.json"
     
     unified_tags  = get_unified_tags(enriched_posts)
     
+    for post in enriched_posts:
+        current_tags = post['tags']
+        # Use .get() with fallback to original tag if missing from unified mapping
+        new_tags = {unified_tags.get(tag, tag) for tag in current_tags}
+        post['tags'] = list(new_tags)
+        
+    with open(processed_file_path, 'w', encoding='utf-8') as outfile:
+        json.dump(enriched_posts, outfile, ensure_ascii=False, indent=4)
+       
+    
 def get_unified_tags(posts_with_metadata):
-    unique_tags = set()
+    unique_tags = set() # Create a set to store unique tags
     for post in posts_with_metadata:
         unique_tags.update(post['tags'])
         
-            
-    # for epost in enriched_posts:
-    #     print(epost)
-    #         #post ={'text': 'abc', 'engagement': 123}
-    #         #metadata = {'line_count': 10, 'language':'English', 'tags': ['Motivation', 'Health', 'Job']}
+    unique_tags_list = ', '.join(unique_tags)
     
+    template = '''I will give you a list of tags. You need to unify tags with the following requirements 
+    1. Tags are unified and merged to create a shorter list.
+        Example 1: "Jobseekers", "Job Hunting" and "Job Search" can be unified to "Job Search".
+        Example 2: "Motivation", "Motivational", "Inspiration" can be unified to "Motivation".
+        Example 3: "Health", "Healthy Living", "Wellness" can be unified to "Health".
+        Example 4: "Personal Growth", "Self Improvement", "Self Development" can be unified to "Personal Growth".
+    2. Each tag should be follow title case convention. For example, "Job Search" instead of "job search".
+    3. Return a valid JSON. No preamble.
+    4. The Output should have mapping of original tags and unified tags.
+        Example:{{"Jobseekers": "Job Search", "Job Hunting": "Job Search", "Job Search": "Job Search", "Motivation": "Motivation", "Motivational": "Motivation", "Inspiration": "Motivation", "Health": "Health", "Healthy Living": "Health", "Wellness": "Health", "Personal Growth": "Personal Growth", "Self Improvement": "Personal Growth", "Self Development": "Personal Growth"}}
+        
+    Here is the list of tags:
+    {tags}
+    '''
+    pt = PromptTemplate.from_template(template)
+    chain = pt | llm
+    response  = chain.invoke(input = {"tags": str(unique_tags_list)})
+    
+    try:
+        json_parser = JsonOutputParser()
+        res = json_parser.parse(response.content)
+    except OutputParserException:
+        raise ValueError(f"Failed to parse LLM response as JSON: {response.content}")
+    return res     
+
+   
 def extract_metadata(post):
     template = '''
     You are given a LinkedIn post. You need to extract the number of lines, language f the post and tags.
